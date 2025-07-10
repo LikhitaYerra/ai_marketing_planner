@@ -1,1 +1,8 @@
+openai
+newsapi-python
+langchain-community
+langchain-openai
 streamlit
+pandas
+apscheduler
+requests
