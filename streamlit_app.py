@@ -15,22 +15,6 @@ from apscheduler.triggers.date import DateTrigger
 import requests
 import base64
 
-# Manual environment variable loading
-def load_env_from_file():
-    try:
-        with open('.env', 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    key, value = line.split('=', 1)
-                    os.environ[key.strip()] = value.strip().strip('"\'')
-        print("Environment variables loaded from .env file")
-    except Exception as e:
-        print(f"Warning: Could not load .env file: {e}")
-
-# Call the function instead of load_dotenv()
-load_env_from_file()
-
 # Initialize session state
 if 'feedback_data' not in st.session_state:
     st.session_state.feedback_data = []
@@ -67,8 +51,8 @@ scheduler.start()
 
 # Initialize API clients using environment variables
 def init_api_clients():
-    openai_key = os.getenv('OPENAI_API_KEY')
-    newsapi_key = os.getenv('NEWSAPI_KEY')
+    openai_key = st.secrets["OPENAI_API_KEY"]
+    newsapi_key = st.secrets["NEWSAPI_KEY"]
     
     if not openai_key:
         st.error("OpenAI API key not found. Please check your .env file.")
