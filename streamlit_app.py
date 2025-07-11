@@ -826,7 +826,7 @@ if not (result and "token" in result):
     st.stop()
 else:
     st.success("Signed in successfully!")
-    st.write("User info:", result.get("userinfo", {}))
+    
 
 # Sidebar for filters and knowledge base management
 with st.sidebar:
