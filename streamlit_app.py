@@ -13,7 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
 import requests
 import base64
-from streamlit_oauth import OAuth2Component
+from streamlit_oauth import OAuth2Component, StreamlitOauthError
 
 
 # Initialize session state
@@ -800,33 +800,7 @@ Generate:
     return content_plan
 
 # Streamlit UI with enhanced features
-# Remove authentication handling and start directly with the main app content
 st.title("🧠 AI Content Planner")
-
-# Google OAuth setup
-client_id = st.secrets["GOOGLE_CLIENT_ID"]
-client_secret = st.secrets["GOOGLE_CLIENT_SECRET"]
-
-oauth2 = OAuth2Component(
-    client_id=client_id,
-    client_secret=client_secret,
-    authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
-    token_endpoint="https://oauth2.googleapis.com/token"
-)
-
-result = oauth2.authorize_button(
-    "Sign in with Google",
-    "https://ai-marketing-app-9pjzbldy76t.streamlit.app",  # redirect_uri
-    "openid email profile",   # scope
-    key="google_login"
-)
-
-if not (result and "token" in result):
-    st.warning("Please sign in with Google to continue.")
-    st.stop()
-else:
-    st.success("Signed in successfully!")
-    
 
 # Sidebar for filters and knowledge base management
 with st.sidebar:
@@ -1021,7 +995,7 @@ with tab2:
         max_value=5000,
         value=1000,
         step=100,
-        key="schedule_word_count"  # <-- Already unique, keep as is
+        key="schedule_word_count"  
     )
     
     # Display scheduled articles
