@@ -7,3 +7,4 @@ pandas
 apscheduler
 requests
 faiss-cpu
+streamlit-oauth
