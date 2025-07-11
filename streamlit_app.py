@@ -1,4 +1,3 @@
-
 import os
 from openai import OpenAI
 from newsapi import NewsApiClient
@@ -14,6 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
 import requests
 import base64
+
 
 # Initialize session state
 if 'feedback_data' not in st.session_state:
@@ -53,7 +53,6 @@ scheduler.start()
 def init_api_clients():
     openai_key = st.secrets["OPENAI_API_KEY"]
     newsapi_key = st.secrets["NEWSAPI_KEY"]
-    
     if not openai_key:
         st.error("OpenAI API key not found. Please check your .env file.")
         return None, None
@@ -757,13 +756,13 @@ Generate:
         target_audience = st.selectbox(
             "Target Audience",
             ["General", "Technical", "Business", "Marketing", "Developers", "Executives"],
-            key="content_plan_audience"
+            key="content_plan_audience_main"  # Changed key to be unique
         )
         
         tone = st.selectbox(
             "Content Tone",
             ["Professional", "Casual", "Technical", "Conversational", "Formal", "Inspirational"],
-            key="content_plan_tone"
+            key="content_plan_tone_main"  # Changed key to be unique
         )
         
         word_count = st.number_input(
@@ -772,7 +771,7 @@ Generate:
             max_value=5000,
             value=1000,
             step=100,
-            key="content_plan_word_count"
+            key="content_plan_word_count_main"  # <-- Make this unique
         )
         
         selected_date = st.date_input(
@@ -883,7 +882,7 @@ if st.session_state.show_article_config:
         max_value=5000,
         value=1000,
         step=100,
-        key="content_plan_word_count"
+        key="content_plan_word_count_config"  # <-- Make this unique
     )
     
     # Add a key to the date_input to maintain its state
@@ -996,7 +995,7 @@ with tab2:
         max_value=5000,
         value=1000,
         step=100,
-        key="schedule_word_count"
+        key="schedule_word_count"  # <-- Already unique, keep as is
     )
     
     # Display scheduled articles
