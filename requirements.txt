@@ -8,3 +8,4 @@ apscheduler
 requests
 faiss-cpu
 streamlit-oauth
+pytest
