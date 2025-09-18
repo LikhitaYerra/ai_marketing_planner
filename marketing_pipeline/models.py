@@ -28,7 +28,7 @@ class RunResult:
 
     plan: Dict[str, Any]
     articles: Optional[List[Dict[str, Any]]] = None
-    posts: Optional[Dict[str, List[Dict[str, Any]]]] = None
+    posts: Optional[Dict[str, Dict[str, List[Dict[str, Any]]]]] = None
     seo_summary: Optional[Dict[str, Any]] = None
     evaluation: Optional[Dict[str, Any]] = None
     case_study: Optional[str] = None

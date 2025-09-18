@@ -74,10 +74,15 @@ def run_pipeline(run_input: RunInput, config: Optional[FeatureConfig] = None) ->
         brief = build_content_brief(keyword_data)
 
     languages = run_input.languages or config.DEFAULT_LANGS
+    if not config.FEATURE_LOCALIZATION_FR:
+        filtered = [lang for lang in languages if lang.lower() != "fr"]
+        if len(filtered) != len(languages):
+            LOGGER.info("Skipping French outputs - localisation flag disabled")
+        languages = filtered or ["en"]
     channels = run_input.channels or config.SOCIAL_CHANNELS
 
     articles: List[Dict[str, object]] = []
-    posts: Dict[str, List[Dict[str, object]]] = {}
+    posts: Dict[str, Dict[str, List[Dict[str, object]]]] = {}
     if brief:
         with StepTimer("article_generation"):
             for language in languages:
@@ -96,7 +101,7 @@ def run_pipeline(run_input: RunInput, config: Optional[FeatureConfig] = None) ->
     else:
         LOGGER.info("No brief available; skipping article and social generation")
 
-    seo_summary = keyword_data if config.FEATURE_SEO_INGEST else None
+    seo_summary = keyword_data if (config.FEATURE_SEO_INGEST and keyword_data) else None
 
     evaluation = None
     case_study = None

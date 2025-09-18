@@ -38,6 +38,8 @@ def evaluate_run(result: Dict[str, object], brief: Dict[str, object], config: Fe
         coverage_secondary = _keyword_coverage(content, secondary)
 
     def _flatten_posts(field: str) -> bool:
+        if field == "utm" and not config.FEATURE_UTM_LINKS:
+            return True
         posts = result.get("posts") or {}
         for language_posts in posts.values():
             for variant_list in language_posts.values():

@@ -42,13 +42,13 @@ def _parse_list(value: Optional[str], default: Iterable[str]) -> List[str]:
 class FeatureConfig:
     """Holds feature flags and runtime defaults for the pipeline."""
 
-    FEATURE_SEO_INGEST: bool = True
-    FEATURE_LOCALIZATION_FR: bool = True
-    FEATURE_SOCIAL_AB_TESTING: bool = True
+    FEATURE_SEO_INGEST: bool = False
+    FEATURE_LOCALIZATION_FR: bool = False
+    FEATURE_SOCIAL_AB_TESTING: bool = False
     FEATURE_UTM_LINKS: bool = True
     FEATURE_RUN_REPORT: bool = True
-    FEATURE_KB_EMBED_STORE: bool = True
-    DEFAULT_LANGS: List[str] = field(default_factory=lambda: ["en", "fr"])
+    FEATURE_KB_EMBED_STORE: bool = False
+    DEFAULT_LANGS: List[str] = field(default_factory=lambda: ["en"])
     SOCIAL_CHANNELS: List[str] = field(default_factory=lambda: ["facebook", "instagram", "linkedin"])
 
     def snapshot(self) -> dict:
@@ -70,13 +70,13 @@ def load_config(overrides: Optional[dict] = None) -> FeatureConfig:
     """Load configuration from environment variables with optional overrides."""
 
     config = FeatureConfig(
-        FEATURE_SEO_INGEST=_strtobool(os.getenv("FEATURE_SEO_INGEST"), True),
-        FEATURE_LOCALIZATION_FR=_strtobool(os.getenv("FEATURE_LOCALIZATION_FR"), True),
-        FEATURE_SOCIAL_AB_TESTING=_strtobool(os.getenv("FEATURE_SOCIAL_AB_TESTING"), True),
+        FEATURE_SEO_INGEST=_strtobool(os.getenv("FEATURE_SEO_INGEST"), False),
+        FEATURE_LOCALIZATION_FR=_strtobool(os.getenv("FEATURE_LOCALIZATION_FR"), False),
+        FEATURE_SOCIAL_AB_TESTING=_strtobool(os.getenv("FEATURE_SOCIAL_AB_TESTING"), False),
         FEATURE_UTM_LINKS=_strtobool(os.getenv("FEATURE_UTM_LINKS"), True),
         FEATURE_RUN_REPORT=_strtobool(os.getenv("FEATURE_RUN_REPORT"), True),
-        FEATURE_KB_EMBED_STORE=_strtobool(os.getenv("FEATURE_KB_EMBED_STORE"), True),
-        DEFAULT_LANGS=_parse_list(os.getenv("DEFAULT_LANGS"), ["en", "fr"]),
+        FEATURE_KB_EMBED_STORE=_strtobool(os.getenv("FEATURE_KB_EMBED_STORE"), False),
+        DEFAULT_LANGS=_parse_list(os.getenv("DEFAULT_LANGS"), ["en"]),
         SOCIAL_CHANNELS=_parse_list(
             os.getenv("SOCIAL_CHANNELS"),
             ["facebook", "instagram", "linkedin"],
