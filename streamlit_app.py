@@ -14,6 +14,15 @@ from apscheduler.triggers.date import DateTrigger
 import requests
 import base64
 from streamlit_oauth import OAuth2Component, StreamlitOauthError
+from typing import List, Optional
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] %(name)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 # Initialize session state
@@ -136,6 +145,151 @@ class RAGManager:
 
     def get_retriever(self):
         return self.vectorstore.as_retriever()
+
+
+class MarketingPipeline:
+    """Unified MVP pipeline for ingesting SEO reports and generating content."""
+
+    SUPPORTED_LANGUAGES = {
+        "English": "en",
+        "French": "fr",
+    }
+
+    def __init__(self, openai_client: OpenAI, rag_manager: RAGManager):
+        self.client = openai_client
+        self.rag_manager = rag_manager
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def ingest_seo_report(self, report_text: str, language_label: str) -> None:
+        """Store the SEO analysis report in the knowledge base for downstream use."""
+        if not report_text:
+            raise ValueError("SEO analysis report text is required for ingestion.")
+
+        language_code = self.SUPPORTED_LANGUAGES.get(language_label, "en")
+        annotated_text = f"[language={language_code}]\n{report_text}"
+        self.logger.info("Ingesting SEO report into the knowledge base")
+        self.rag_manager.add_to_knowledge_base(annotated_text)
+
+    def extract_keywords(self, report_text: str, manual_keywords: Optional[List[str]], language_label: str) -> List[str]:
+        """Extract SEO keywords and merge with any provided manual keywords."""
+        keywords = [kw.strip() for kw in (manual_keywords or []) if kw.strip()]
+        if not report_text:
+            self.logger.warning("No SEO report provided; returning manual keywords only")
+            return keywords
+
+        prompt = (
+            "You are an SEO specialist. Extract up to 12 high-impact keywords from the provided SEO analysis report. "
+            "Return the keywords as a JSON array of strings and respond in the same language specified.\n\n"
+            f"Language: {language_label}\n"
+            f"SEO Analysis Report:\n{report_text}"
+        )
+
+        raw_keywords = ""
+        try:
+            self.logger.info("Requesting keyword extraction from OpenAI")
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+            )
+            raw_keywords = response.choices[0].message.content.strip()
+            extracted = json.loads(raw_keywords)
+            if not isinstance(extracted, list):
+                raise ValueError("Keyword response was not a list.")
+            keywords.extend([kw.strip() for kw in extracted if isinstance(kw, str) and kw.strip()])
+        except Exception as exc:
+            self.logger.warning("Keyword extraction failed: %s", exc)
+            try:
+                # Fallback: attempt to split on commas
+                fallback = [kw.strip() for kw in raw_keywords.split(",") if kw.strip()]
+                keywords.extend(fallback)
+            except Exception:
+                self.logger.debug("Fallback keyword parsing failed.")
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_keywords: List[str] = []
+        for kw in keywords:
+            if kw.lower() not in seen:
+                seen.add(kw.lower())
+                unique_keywords.append(kw)
+
+        self.logger.info("Compiled %d unique keywords", len(unique_keywords))
+        return unique_keywords
+
+    def _build_context(self, search_query: str) -> str:
+        retriever = self.rag_manager.get_retriever()
+        docs = retriever.invoke(search_query)
+        return "\n\n".join(doc.page_content for doc in docs)
+
+    def generate_article(self, topic: str, keywords: List[str], language_label: str) -> str:
+        language_code = self.SUPPORTED_LANGUAGES.get(language_label, "en")
+        search_query = topic if topic else ", ".join(keywords)
+        context = self._build_context(search_query)
+        keyword_block = ", ".join(keywords) if keywords else ""
+
+        prompt = f"""
+You are an experienced marketing copywriter creating an article in {language_label} (language code: {language_code}).
+Incorporate the following SEO keywords naturally in the piece: {keyword_block if keyword_block else 'No specific keywords provided.'}
+
+Reference insights from the internal knowledge base context provided below. If a section is not relevant, you may omit it but prioritize accuracy.
+
+Knowledge Base Context:
+{context if context else '[No additional context retrieved.]'}
+
+Write a 800-1000 word article that is ready to publish immediately. Focus on actionable recommendations aligned with the SEO analysis. Do not include outlines or bullet-only drafts—deliver full prose content with headings.
+"""
+
+        self.logger.info("Generating long-form article")
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.6,
+        )
+        return response.choices[0].message.content.strip()
+
+    def generate_social_posts(self, article: str, keywords: List[str], language_label: str) -> dict:
+        language_code = self.SUPPORTED_LANGUAGES.get(language_label, "en")
+        prompt = f"""
+Create compelling social media copy in {language_label} (language code: {language_code}) inspired by the following article.
+Ensure the posts reflect the SEO focus using these keywords when natural: {', '.join(keywords) if keywords else 'None provided'}.
+
+Article:
+{article}
+
+Provide a JSON object with keys 'facebook', 'instagram', and 'linkedin'. Each value should contain:
+- A platform-tailored post in {language_label}
+- Two relevant hashtags
+- A suggested call-to-action
+"""
+
+        self.logger.info("Generating social posts for Facebook, Instagram, and LinkedIn")
+        response = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+
+        raw_content = response.choices[0].message.content.strip()
+        try:
+            return json.loads(raw_content)
+        except json.JSONDecodeError:
+            self.logger.warning("Failed to parse JSON social posts; returning raw content.")
+            return {"facebook": raw_content, "instagram": raw_content, "linkedin": raw_content}
+
+    def run_pipeline(self, report_text: str, topic: str, manual_keywords: Optional[List[str]], language_label: str) -> dict:
+        self.logger.info("Starting unified marketing pipeline")
+        self.ingest_seo_report(report_text, language_label)
+        keywords = self.extract_keywords(report_text, manual_keywords, language_label)
+        article = self.generate_article(topic, keywords, language_label)
+        social_posts = self.generate_social_posts(article, keywords, language_label)
+        self.logger.info("Pipeline complete")
+        return {
+            "keywords": keywords,
+            "article": article,
+            "social_posts": social_posts,
+        }
+
 # GPT-4 Generation Node
 def save_articles_data(articles):
     print(f"[DEBUG] Saving articles: {len(articles)} articles")
@@ -830,6 +984,100 @@ if 'content_plan_result' not in st.session_state:
     st.session_state.content_plan_result = None
 if 'headlines_result' not in st.session_state:
     st.session_state.headlines_result = []
+if 'pipeline_result' not in st.session_state:
+    st.session_state.pipeline_result = None
+
+st.subheader("🔁 Unified SEO-to-Content Pipeline")
+pipeline_language = st.selectbox(
+    "Select pipeline language",
+    list(MarketingPipeline.SUPPORTED_LANGUAGES.keys()),
+    key="pipeline_language",
+)
+
+pipeline_topic = st.text_input(
+    "Primary article topic or focus",
+    value="",
+    key="pipeline_topic",
+)
+
+seo_report_text = st.text_area(
+    "Paste SEO analysis report",
+    value="",
+    height=200,
+    key="pipeline_report_text",
+)
+
+seo_report_file = st.file_uploader(
+    "Upload SEO analysis report (optional)",
+    type=["txt", "md"],
+    key="pipeline_report_file",
+)
+
+manual_keywords_input = st.text_input(
+    "Optional manual keywords (comma separated)",
+    value="",
+    key="pipeline_manual_keywords",
+)
+
+if st.button("Run Unified Pipeline", key="pipeline_run_button"):
+    combined_report = seo_report_text.strip()
+    if seo_report_file is not None:
+        try:
+            uploaded_text = seo_report_file.read().decode("utf-8")
+            combined_report = f"{combined_report}\n\n{uploaded_text}" if combined_report else uploaded_text
+        except Exception as upload_error:
+            st.error(f"Unable to read uploaded report: {upload_error}")
+            combined_report = combined_report or ""
+
+    manual_keywords = [kw.strip() for kw in manual_keywords_input.split(",") if kw.strip()]
+
+    if not combined_report:
+        st.error("Please provide an SEO analysis report by pasting text or uploading a file.")
+        st.session_state.pipeline_result = None
+    else:
+        try:
+            pipeline_runner = MarketingPipeline(client, RAGManager())
+            pipeline_output = pipeline_runner.run_pipeline(
+                report_text=combined_report,
+                topic=pipeline_topic,
+                manual_keywords=manual_keywords,
+                language_label=pipeline_language,
+            )
+            st.session_state.pipeline_result = pipeline_output
+            st.success("Pipeline completed successfully. Review the generated assets below.")
+        except Exception as pipeline_error:
+            st.session_state.pipeline_result = None
+            st.error(f"Pipeline execution failed: {pipeline_error}")
+
+if st.session_state.pipeline_result:
+    pipeline_output = st.session_state.pipeline_result
+    st.markdown("### Extracted Keywords")
+    if pipeline_output["keywords"]:
+        st.write(", ".join(pipeline_output["keywords"]))
+    else:
+        st.info("No keywords were extracted or provided.")
+
+    st.markdown("### Generated Article")
+    st.text_area(
+        "Article",
+        value=pipeline_output["article"],
+        height=400,
+        key="pipeline_article_output",
+        disabled=True,
+    )
+
+    social_posts = pipeline_output.get("social_posts", {})
+    st.markdown("### Social Media Posts")
+    for platform in ["facebook", "instagram", "linkedin"]:
+        content = social_posts.get(platform)
+        if content:
+            st.markdown(f"**{platform.title()}**")
+            if isinstance(content, str):
+                st.write(content)
+            else:
+                st.json(content)
+        else:
+            st.write(f"No {platform} post generated.")
 
 if st.button("Generate Plan"):
     keywords = [k.strip() for k in keywords_input.split(",")]
